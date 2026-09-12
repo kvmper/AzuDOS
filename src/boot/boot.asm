@@ -73,12 +73,13 @@ error:
 .loop: jmp .loop
 
 dap:
-    .packet: db 0x10
-    .reserved: db 0
-    .sectors: dw 8
+    .packet: db 0x10 ; Size of packet (16 bytes, 0x10)
+    .reserved: db 0 ; Always 0 
+    .sectors: dw 8 ; Number of sectors to transfer (max 127 on some BIOSes) 
+    ; Transfer buffer (16 bit segment:16 bit offset)
     .offset: dw 0x1000
     .segment: dw 0
-    .lba: dq 1
+    .lba: dq 1 ; LBA address of sector to read from disk 
 
 times 510 - ($-$$) db 0 ; Pad to 510 bytes
 db 0x55, 0xAA ; Signature (now the binary file is exactly 512 bytes, 1 sector)

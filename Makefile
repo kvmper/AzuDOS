@@ -13,7 +13,7 @@ build:
 docs:
 
 clean:
-	rm -rf build
+	rm -rf build dist
 clean-all:
 	rm -rf build dist docs
 run: build

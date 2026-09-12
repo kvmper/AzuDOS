@@ -55,7 +55,7 @@ check_a20__exit:
     ret
 
 ; Enable the A20 line using AX = 0x2401, INT = 0x15
-bios_a20:
+bios_a20: ; Extremely simplified version but it works
 .query:
     mov ax, 0x2403
     int 0x15
