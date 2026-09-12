@@ -2,6 +2,9 @@ BITS 16 ; Execution starts in 16 bits (real mode)
 ORG 0x0600 ; Memory addresses start at 0x0600 (this way we don't have to type + 0x0600 if we want to access something)
 CPU 386 ; Intel 80386 CPU
 
+; For now, the loader is at a fixed address, we probably want to change that later
+; Other improvements include error handling and code safety (idk if code is even unsafe)
+
 boot_start:
     cli ; Clear interrupts
     cld ; Clear direction flag
@@ -10,7 +13,7 @@ boot_start:
     mov es, ax ; Extra seg = 0
 .stack_setup: ; Setup stack
     mov ss, ax ; Stack seg = 0
-    mov sp, ax ; Stack ptr = 0
+    mov sp, 0x0600 ; Stack ptr = 0x0600
 .relocate: ; Copies the MBR to the target address
     mov cx, 512 ; 512 bytes
     mov si, 0x7C00 ; Curent address
@@ -21,13 +24,13 @@ boot_start:
 
 ; Located at 0x0600
 relocated_start:
-.stack_setup: ; Setup stack
-    mov sp, 0x0600 ; Set stack at 0x0600
 .vga_setup:
-    mov ax, 0x0003
-    int 0x10
+    mov ax, 0x0003 ; Set video mode and set it to mode 3 (AH = 0, AL = 0x03)
+    int 0x10 ; Invoke BIOS video interrupt
 .check_if_floppy:
-    cmp dl, 0x80
+    cmp dl, 0x80 ; The BIOS stores the boot device number in the DL register
+    ; If the value is 0x7F or less, it's a floppy
+    ; If the value is 0x80 or more, it's a hard disk
     jae .disk_setup ; It's a hard disk!
 .floppy: ; It's a floppy! floppys are not supported
     ; Implement more functionality later
@@ -51,6 +54,8 @@ relocated_start:
     mov si, dap ; Move SI to point at the DAP
     int 0x13 ; Invoke BIOS interrupt
     jc error ; Uh oh, error! Theres likely something wrong with the DAP
+.jump_loader:
+    cli ; Clear interrupts before jumping to loader
     jmp 0:0x1000 ; Jump to loader
 
 ; General error handler
@@ -74,10 +79,6 @@ dap:
     .offset: dw 0x1000
     .segment: dw 0
     .lba: dq 1
-
-BOOT_DRIVE db 0 ; Where we store the boot drive number
-; 0x80 and more for hard disk
-; 0x7F and less for floppy
 
 times 510 - ($-$$) db 0 ; Pad to 510 bytes
 db 0x55, 0xAA ; Signature (now the binary file is exactly 512 bytes, 1 sector)
