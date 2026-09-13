@@ -1,13 +1,17 @@
 BITS 16 ; Still executing in real mode
-CPU 386 ; Intel 80386 CPU
 
 section .text
 loader_start:
-    jmp error
+    xor ax, ax
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
     mov [BOOT_DEVICE], dl ; Save boot device number for later
 .stack_setup:
     xor ax, ax
-    mov sp, 0x1000
+    mov sp, 0xFFFF
 .a20: ; A20 related code
     ; Check if A20 is enabled
     call check_a20
@@ -25,7 +29,7 @@ loader_start:
     call check_a20
     cmp ax, 1
     je .a20_enabled
-    jmp error ; Failed to enable A20 line, error
+    jmp error16 ; Failed to enable A20 line, error
 .a20_enabled:
     mov [A20_ENABLED], 1
 vga_setup:
@@ -36,6 +40,7 @@ pm_setup:
     out 0x70, al
     in al, 0x71
     lgdt[gdt_desc]
+
     ; Set protection enable bit in CR0
     mov eax, cr0
     or al, 1
@@ -65,20 +70,21 @@ gdt_desc:
     dw (gdt_end - gdt - 1) ; GDT limit
     dd gdt ; GDT base
 
-; Turn on Caps Lock LED to indicate error
+; Blink on Caps Lock LED to indicate error
 ; And please clean this mess oh my god
 ; I should have commented this along the way i don't undrstand this
-error:
+; 16 bit version
+error16:
     ; Turn on Caps Lock LED
     mov bl, 0x04
-    call blink_leds
-    call err_wait ; Wait 100000000 cycles (works for now)
+    call .blink_leds
+    call .err_wait ; Wait 100000000 cycles (works for now)
     ; Disable LEDs
     mov bl, 0x00
-    call blink_leds
-    call err_wait
-    jmp error
-blink_leds:
+    call .blink_leds
+    call .err_wait
+    jmp error16
+.blink_leds:
 .wait_0:
     in al, 0x64
     test al, 2
@@ -98,7 +104,7 @@ blink_leds:
     mov al, bl
     out 0x60, al
     ret
-err_wait:
+.err_wait:
     mov ecx, 100000000
 .spin:
     cmp ecx, 0
@@ -115,18 +121,77 @@ pm_main:
     mov es, eax
     mov fs, eax
     mov gs, eax
+.setup_stack:
+    mov ss, eax
+    mov esp, 0x90000
     ; Enable NMI
     mov al, 0
     out 0x70, al
     in al, 0x71
 
     call pic_remap
-
-    cli
+.is_lm_available:
+    mov eax, 0x80000000
+    cpuid
+    cmp eax, 0x80000001
+    jb .lm_unavailable
+    mov eax, 0x80000001
+    cpuid
+    test edx, 1 << 29
+    jb .lm_unavailable
+    jmp .lm_available
+.lm_unavailable:
+    jmp error32
+.lm_available:
+    mov [LM_SUPPORT], 1
     hlt
 
-BOOT_DEVICE db 0
-A20_ENABLED db 0
+; 32 bit version
+error32:
+    ; Turn on Caps Lock LED
+    mov bl, 0x04
+    call .blink_leds
+    call .err_wait ; Wait 100000000 cycles (works for now)
+    ; Disable LEDs
+    mov bl, 0x00
+    call .blink_leds
+    call .err_wait
+    jmp error32
+.blink_leds:
+.wait_0:
+    in al, 0x64
+    test al, 2
+    jnz .wait_0
+.send_cmd:
+    mov al, 0xED
+    out 0x60, al
+.wait_1:
+    in al, 0x64
+    test al, 1
+    jz .wait_1
+    in al, 0x60
+.enable_led:
+    in al, 0x64
+    test al, 2
+    jnz .enable_led
+    mov al, bl
+    out 0x60, al
+    ret
+.err_wait:
+    mov ecx, 100000000
+.spin:
+    cmp ecx, 0
+    je .return
+    dec ecx
+    jmp .spin
+.return:
+    ret
 
 %include "src/boot/a20.asm"
 %include "src/boot/pic.asm"
+%include "src/boot/evga.asm"
+
+section .data
+BOOT_DEVICE db 0
+A20_ENABLED db 0
+LM_SUPPORT db 0
