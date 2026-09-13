@@ -1,9 +1,13 @@
 BITS 16 ; Still executing in real mode
-ORG 0X1000 ; Loader is located at address 0x1000
 CPU 386 ; Intel 80386 CPU
 
+section .text
 loader_start:
+    jmp error
     mov [BOOT_DEVICE], dl ; Save boot device number for later
+.stack_setup:
+    xor ax, ax
+    mov sp, 0x1000
 .a20: ; A20 related code
     ; Check if A20 is enabled
     call check_a20
@@ -24,11 +28,13 @@ loader_start:
     jmp error ; Failed to enable A20 line, error
 .a20_enabled:
     mov [A20_ENABLED], 1
+vga_setup:
+    
 pm_setup:
     ; Disable NMI
-    in al, 0x70
-    or al, 0x80
+    mov al, 0x80
     out 0x70, al
+    in al, 0x71
     lgdt[gdt_desc]
     ; Set protection enable bit in CR0
     mov eax, cr0
@@ -59,11 +65,48 @@ gdt_desc:
     dw (gdt_end - gdt - 1) ; GDT limit
     dd gdt ; GDT base
 
+; Turn on Caps Lock LED to indicate error
+; And please clean this mess oh my god
+; I should have commented this along the way i don't undrstand this
 error:
-    mov ah, 0x0E
-    mov al, 'E'
-    int 0x10
-    hlt
+    ; Turn on Caps Lock LED
+    mov bl, 0x04
+    call blink_leds
+    call err_wait ; Wait 100000000 cycles (works for now)
+    ; Disable LEDs
+    mov bl, 0x00
+    call blink_leds
+    call err_wait
+    jmp error
+blink_leds:
+.wait_0:
+    in al, 0x64
+    test al, 2
+    jnz .wait_0
+.send_cmd:
+    mov al, 0xED
+    out 0x60, al
+.wait_1:
+    in al, 0x64
+    test al, 1
+    jz .wait_1
+    in al, 0x60
+.enable_led:
+    in al, 0x64
+    test al, 2
+    jnz .enable_led
+    mov al, bl
+    out 0x60, al
+    ret
+err_wait:
+    mov ecx, 100000000
+.spin:
+    cmp ecx, 0
+    je .return
+    dec ecx
+    jmp .spin
+.return:
+    ret
 
 BITS 32 ; Now we're in Protected Mode
 pm_main:
@@ -72,6 +115,12 @@ pm_main:
     mov es, eax
     mov fs, eax
     mov gs, eax
+    ; Enable NMI
+    mov al, 0
+    out 0x70, al
+    in al, 0x71
+
+    call pic_remap
 
     cli
     hlt
@@ -80,3 +129,4 @@ BOOT_DEVICE db 0
 A20_ENABLED db 0
 
 %include "src/boot/a20.asm"
+%include "src/boot/pic.asm"

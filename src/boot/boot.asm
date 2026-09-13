@@ -2,6 +2,9 @@ BITS 16 ; Execution starts in 16 bits (real mode)
 ORG 0x0600 ; Memory addresses start at 0x0600 (this way we don't have to type + 0x0600 if we want to access something)
 CPU 386 ; Intel 80386 CPU
 
+; Logic code alone takes ~100 bytes, meaning there is still a LOT ton of space
+; meaning we can move some stuff from loader to here... but should we?
+
 ; For now, the loader is at a fixed address, we probably want to change that later
 ; Other improvements include error handling and code safety (idk if code is even unsafe)
 

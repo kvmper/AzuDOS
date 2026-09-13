@@ -1,3 +1,5 @@
+# Its bad yea ik
+
 AS := nasm
 
 IMG := dist/AzuDOS.img
@@ -6,10 +8,12 @@ IMG := dist/AzuDOS.img
 
 build:
 	mkdir -p build dist
-	nasm -f bin src/boot/boot.asm -o build/boot.bin
-	nasm -f bin src/boot/loader.asm -o build/loader.bin
-	cat build/boot.bin build/loader.bin > $(IMG)
-	truncate -s 10400K $(IMG)
+	$(AS) -f bin src/boot/boot.asm -o build/boot.bin
+	$(AS) -f elf32 src/boot/loader.asm -o build/loader.o
+	ld -m elf_i386 -T linker/boot/linker.ld -o build/kernel.elf build/loader.o
+	objcopy -O binary build/kernel.elf build/kernel.bin
+	cat build/boot.bin build/kernel.bin> $(IMG)
+	truncate -s 4096K $(IMG)
 docs:
 
 clean:
