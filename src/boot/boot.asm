@@ -49,8 +49,8 @@ relocated_start:
     cmp bx, 0xAA55 ; This should be the value in the BX register if successfull
     jne error ; Not supported
     ; Supported? Continue
-; Okay now we need to read some more sectors, let's read 4KB
-; Each sector is 512 bytes so to read 4KB we need to read 8 sectors
+; Okay now we need to read some more sectors, let's read 32KB
+; Each sector is 512 bytes so to read 32KB we need to read 64 sectors
 ; We declared this in the Disk Address Packet, and to read from it we need to move our Source Index to it
 .lba_read:
     mov ah, 0x42 ; LBA Read sectors
@@ -78,7 +78,7 @@ error:
 dap:
     .packet: db 0x10 ; Size of packet (16 bytes, 0x10)
     .reserved: db 0 ; Always 0 
-    .sectors: dw 8 ; Number of sectors to transfer (max 127 on some BIOSes) 
+    .sectors: dw 64 ; Number of sectors to transfer (max 127 on some BIOSes) 
     ; Transfer buffer (16 bit segment:16 bit offset)
     .offset: dw 0x1000
     .segment: dw 0

@@ -16,24 +16,32 @@ loader_start:
     ; Check if A20 is enabled
     call check_a20
     cmp ax, 1
-    je .a20_enabled ; A20 is enabled yippiee
+    je .a20_enabled_firmware ; A20 is enabled yippiee
 .a20_disabled: ; A20 is disabled
     call bios_a20 ; Attempt enabling A20 line with BIOS
     ; Check if BIOS enabled the A20 Line
     call check_a20
     cmp ax, 1
-    je .a20_enabled
+    je .a20_enabled_bios
 
     call fast_a20 ; Attempt enabling A20 line with fast A20
     ; Check if fast A20 enabled the A20 line
     call check_a20
     cmp ax, 1
-    je .a20_enabled
+    je .a20_enabled_fast
     jmp error16 ; Failed to enable A20 line, error
-.a20_enabled:
+.a20_enabled_firmware:
+    ; A20 was already enabled
+    mov [A20_FIRM], 1
+    jmp .a20_enabled
+.a20_enabled_fast:
+    mov [A20_FAST], 1
+    jmp .a20_enabled
+.a20_enabled_bios:
+    mov [A20_BIOS], 1
+.a20_enabled: 
     mov [A20_ENABLED], 1
-vga_setup:
-    
+
 pm_setup:
     ; Disable NMI
     mov al, 0x80
@@ -144,7 +152,32 @@ pm_main:
     jmp error32
 .lm_available:
     mov [LM_SUPPORT], 1
-    hlt
+.video_setup:
+    call evga_setup
+    call evga_cursor_disable
+.display_info:
+.boot_device:
+.a20_info:
+    mov si, a20_enabled_msg
+    call evga_print
+    cmp [A20_FIRM], 1 ; Was A20 already enabled by firmware
+    je .a20_firm
+    cmp [A20_BIOS], 1 ; Was A20 enabled by BIOS
+    je .a20_bios
+    cmp [A20_FAST], 1 ; Was A20 enabled by Fast A20
+    je .a20_fast
+.a20_firm:
+    mov si, firmware_msg
+    call evga_print
+    jmp error32
+.a20_bios:
+    mov si, bios_msg
+    call evga_print
+    jmp error32
+.a20_fast:
+    mov si, fast_a20_msg
+    call evga_print
+    jmp error32
 
 ; 32 bit version
 error32:
@@ -178,7 +211,7 @@ error32:
     out 0x60, al
     ret
 .err_wait:
-    mov ecx, 100000000
+    mov ecx, 1000000000
 .spin:
     cmp ecx, 0
     je .return
@@ -194,4 +227,16 @@ error32:
 section .data
 BOOT_DEVICE db 0
 A20_ENABLED db 0
-LM_SUPPORT db 0
+A20_FIRM    db 0
+A20_BIOS    db 0
+A20_FAST    db 0
+LM_SUPPORT  db 0
+
+boot_device_msg: db "Boot device -> ", 0
+a20_enabled_msg: db "A20 enabled using ", 0
+fast_a20_msg: db "Fast A20", 0
+bios_msg: db "BIOS", 0
+firmware_msg: db "Firmware", 0
+
+lm_supported_msg: db "Long Mode is supported: ", 0
+lm_unsuppored_msg: db "Long Mode is not supported: ", 0
