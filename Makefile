@@ -14,11 +14,7 @@ build:
 	objcopy -O binary build/kernel.elf build/kernel.bin
 	cat build/boot.bin build/kernel.bin> $(IMG)
 	truncate -s 4096K $(IMG)
-docs:
-
 clean:
 	rm -rf build dist
-clean-all:
-	rm -rf build dist docs
 run: build
 	qemu-system-x86_64 -cpu host -enable-kvm -drive file=$(IMG),format=raw,media=disk -serial stdio -d int,cpu_reset,guest_errors -no-reboot

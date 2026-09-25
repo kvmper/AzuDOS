@@ -1,6 +1,9 @@
 BITS 16 ; Still executing in real mode
 
 section .text
+
+%include "include/evga_macros.asm"
+
 loader_start:
     xor ax, ax
     mov ds, ax
@@ -149,7 +152,7 @@ pm_main:
     jb .lm_unavailable
     jmp .lm_available
 .lm_unavailable:
-    jmp error32
+
 .lm_available:
     mov [LM_SUPPORT], 1
 .video_setup:
@@ -159,7 +162,7 @@ pm_main:
 .boot_device:
 .a20_info:
     mov si, a20_enabled_msg
-    call evga_print
+    call _evga_print
     cmp [A20_FIRM], 1 ; Was A20 already enabled by firmware
     je .a20_firm
     cmp [A20_BIOS], 1 ; Was A20 enabled by BIOS
@@ -167,20 +170,31 @@ pm_main:
     cmp [A20_FAST], 1 ; Was A20 enabled by Fast A20
     je .a20_fast
 .a20_firm:
-    mov si, firmware_msg
-    call evga_print
-    jmp error32
+    evga_println(firmware_msg)
+    jmp .lm_info
 .a20_bios:
-    mov si, bios_msg
-    call evga_print
-    jmp error32
+    evga_println(bios_msg)
+    jmp .lm_info
 .a20_fast:
-    mov si, fast_a20_msg
-    call evga_print
+    evga_println(fast_a20_msg)
+    call _evga_print
+    jmp .lm_info
+.lm_info:
+    cmp [LM_SUPPORT], 1
+    je .lm_supported
+    evga_print(lm_unsuppored_msg)
     jmp error32
+.lm_supported:
+    evga_print(lm_supported_msg)
+    jmp error32
+    
 
 ; 32 bit version
 error32:
+    call evga_newline
+    evga_print("Encountered a critical error! (PM)")
+    call evga_cursor_enable
+.main_loop:
     ; Turn on Caps Lock LED
     mov bl, 0x04
     call .blink_leds
@@ -189,7 +203,7 @@ error32:
     mov bl, 0x00
     call .blink_leds
     call .err_wait
-    jmp error32
+    jmp .main_loop
 .blink_leds:
 .wait_0:
     in al, 0x64
@@ -238,5 +252,5 @@ fast_a20_msg: db "Fast A20", 0
 bios_msg: db "BIOS", 0
 firmware_msg: db "Firmware", 0
 
-lm_supported_msg: db "Long Mode is supported: ", 0
-lm_unsuppored_msg: db "Long Mode is not supported: ", 0
+lm_supported_msg: db "Long Mode is supported", 0
+lm_unsuppored_msg: db "Long Mode is not supported", 0
