@@ -1,5 +1,9 @@
 BITS 16
 
+global check_a20
+global bios_a20
+global fast_a20
+
 ; Some, if not most of the code is from https://wiki.osdev.org/A20_Line
 
 ; Check if A20 Line was already enabled by BIOS

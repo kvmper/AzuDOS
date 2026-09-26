@@ -1,5 +1,7 @@
 BITS 32
 
+global pic_remap
+
 PIC1            equ 0x20
 PIC2            equ 0xA0
 PIC1_COMMAND    equ PIC1

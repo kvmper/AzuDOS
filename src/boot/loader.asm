@@ -1,20 +1,41 @@
 BITS 16 ; Still executing in real mode
 
-section .text
+extern check_a20
+extern bios_a20
+extern check_a20
+extern fast_a20
 
+extern pic_remap
+
+extern evga_setup
+extern _evga_print_char
+extern _evga_print
+extern _evga_println
+extern _evga_printhex
+extern _evga_printdec
+extern evga_newline
+extern evga_cursor_disable
+extern evga_cursor_enable
+extern evga_cursor_move
+extern cursor_x_pos
+extern cursor_y_pos
+
+extern error16
+extern error32
+
+section .text
 %include "include/evga_macros.asm"
 
+global loader_start
 loader_start:
-    xor ax, ax
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax
     mov [BOOT_DEVICE], dl ; Save boot device number for later
+    mov ah, 0x08 ; How many drives are connected
+    int 0x13 ; I think this enables interrupts?
+    mov [DRIVE_COUNT], dl
+    cli
 .stack_setup:
-    xor ax, ax
-    mov sp, 0xFFFF
+    xor ax, ax ; 0
+    mov sp, ax ; 0
 .a20: ; A20 related code
     ; Check if A20 is enabled
     call check_a20
@@ -46,6 +67,7 @@ loader_start:
     mov [A20_ENABLED], 1
 
 pm_setup:
+    cli
     ; Disable NMI
     mov al, 0x80
     out 0x70, al
@@ -81,52 +103,9 @@ gdt_desc:
     dw (gdt_end - gdt - 1) ; GDT limit
     dd gdt ; GDT base
 
-; Blink on Caps Lock LED to indicate error
-; And please clean this mess oh my god
-; I should have commented this along the way i don't undrstand this
-; 16 bit version
-error16:
-    ; Turn on Caps Lock LED
-    mov bl, 0x04
-    call .blink_leds
-    call .err_wait ; Wait 100000000 cycles (works for now)
-    ; Disable LEDs
-    mov bl, 0x00
-    call .blink_leds
-    call .err_wait
-    jmp error16
-.blink_leds:
-.wait_0:
-    in al, 0x64
-    test al, 2
-    jnz .wait_0
-.send_cmd:
-    mov al, 0xED
-    out 0x60, al
-.wait_1:
-    in al, 0x64
-    test al, 1
-    jz .wait_1
-    in al, 0x60
-.enable_led:
-    in al, 0x64
-    test al, 2
-    jnz .enable_led
-    mov al, bl
-    out 0x60, al
-    ret
-.err_wait:
-    mov ecx, 100000000
-.spin:
-    cmp ecx, 0
-    je .return
-    dec ecx
-    jmp .spin
-.return:
-    ret
-
 BITS 32 ; Now we're in Protected Mode
 pm_main:
+    cli
     mov eax, 0x10
     mov ds, eax
     mov es, eax
@@ -139,27 +118,32 @@ pm_main:
     mov al, 0
     out 0x70, al
     in al, 0x71
-
+.video_setup:
+    call evga_setup
+    call evga_cursor_disable
+.pic_remap:
     call pic_remap
+    evga_println("PIC remapped")
 .is_lm_available:
     mov eax, 0x80000000
     cpuid
     cmp eax, 0x80000001
-    jb .lm_unavailable
+    jb .display_info ; Skip
     mov eax, 0x80000001
     cpuid
     test edx, 1 << 29
-    jb .lm_unavailable
-    jmp .lm_available
-.lm_unavailable:
-
+    jz .display_info ; Skip
 .lm_available:
     mov [LM_SUPPORT], 1
-.video_setup:
-    call evga_setup
-    call evga_cursor_disable
 .display_info:
 .boot_device:
+    evga_print(boot_device_msg)
+    evga_printhex(BOOT_DEVICE)
+    call evga_newline
+.drive_count:
+    evga_print("Drives: ")
+    evga_printdec(DRIVE_COUNT)
+    call evga_newline
 .a20_info:
     mov si, a20_enabled_msg
     call _evga_print
@@ -183,74 +167,26 @@ pm_main:
     cmp [LM_SUPPORT], 1
     je .lm_supported
     evga_print(lm_unsuppored_msg)
-    jmp error32
+    jmp .memory
 .lm_supported:
     evga_print(lm_supported_msg)
-    jmp error32
-    
-
-; 32 bit version
-error32:
-    call evga_newline
-    evga_print("Encountered a critical error! (PM)")
-    call evga_cursor_enable
-.main_loop:
-    ; Turn on Caps Lock LED
-    mov bl, 0x04
-    call .blink_leds
-    call .err_wait ; Wait 100000000 cycles (works for now)
-    ; Disable LEDs
-    mov bl, 0x00
-    call .blink_leds
-    call .err_wait
-    jmp .main_loop
-.blink_leds:
-.wait_0:
-    in al, 0x64
-    test al, 2
-    jnz .wait_0
-.send_cmd:
-    mov al, 0xED
-    out 0x60, al
-.wait_1:
-    in al, 0x64
-    test al, 1
-    jz .wait_1
-    in al, 0x60
-.enable_led:
-    in al, 0x64
-    test al, 2
-    jnz .enable_led
-    mov al, bl
-    out 0x60, al
-    ret
-.err_wait:
-    mov ecx, 1000000000
-.spin:
-    cmp ecx, 0
-    je .return
-    dec ecx
-    jmp .spin
-.return:
-    ret
-
-%include "src/boot/a20.asm"
-%include "src/boot/pic.asm"
-%include "src/boot/evga.asm"
+.memory:
+    call error32
 
 section .data
-BOOT_DEVICE db 0
-A20_ENABLED db 0
-A20_FIRM    db 0
-A20_BIOS    db 0
-A20_FAST    db 0
-LM_SUPPORT  db 0
+BOOT_DEVICE db 0 ; Boot device number
+DRIVE_COUNT db 0 ; How many drives has the BIOS found
+A20_ENABLED db 0 ; Was A20 enabled
+A20_FIRM    db 0 ; Was A20 enabled already by the CPU
+A20_BIOS    db 0 ; Was A20 enabled using the BIOS method
+A20_FAST    db 0 ; Was A20 enabled using Fast A20 method
+LM_SUPPORT  db 0 ; Is Long Mode supported
 
-boot_device_msg: db "Boot device -> ", 0
+boot_device_msg: db "Boot device: ", 0
 a20_enabled_msg: db "A20 enabled using ", 0
 fast_a20_msg: db "Fast A20", 0
 bios_msg: db "BIOS", 0
 firmware_msg: db "Firmware", 0
 
-lm_supported_msg: db "Long Mode is supported", 0
-lm_unsuppored_msg: db "Long Mode is not supported", 0
+lm_supported_msg: db "Long Mode supported", 0 ; Yes
+lm_unsuppored_msg: db "Long Mode not supported", 0 ; No
