@@ -1,12 +1,15 @@
 BITS 16 ; Still executing in real mode
 
+; A20
 extern check_a20
 extern bios_a20
 extern check_a20
 extern fast_a20
 
+; PIC
 extern pic_remap
 
+; EVGA
 extern evga_setup
 extern _evga_print_char
 extern _evga_print
@@ -20,22 +23,31 @@ extern evga_cursor_move
 extern cursor_x_pos
 extern cursor_y_pos
 
+; Error handlers
 extern error16
 extern error32
+
+; Kernel related
+extern kernel_entry
+
+; For Long Mode
+CPUID_EXTENSIONS equ 0x80000000 ; returns the maximum extended requests for cpuid
+CPUID_EXT_FEATURES equ 0x80000001 ; returns flags containing long mode support among other things
+CPUID_EDX_EXT_FEAT_LM equ 1 << 29   ; if this is set, the CPU supports long mode
 
 section .text
 %include "include/evga_macros.asm"
 
 global loader_start
 loader_start:
-    mov [BOOT_DEVICE], dl ; Save boot device number for later
+    mov byte [BOOT_DEVICE], dl ; Save boot device number for later
     mov ah, 0x08 ; How many drives are connected
-    int 0x13 ; I think this enables interrupts?
-    mov [DRIVE_COUNT], dl
-    cli
+    int 0x13 ; Invoke BIOS disk interrupt
+    mov byte [DRIVE_COUNT], dl ; Save how many drives detected for later
+    cli ; Clear interrupts
 .stack_setup:
     xor ax, ax ; 0
-    mov sp, ax ; 0
+    mov sp, ax ; 0 and then wraps to 0xFFFF
 .a20: ; A20 related code
     ; Check if A20 is enabled
     call check_a20
@@ -54,25 +66,25 @@ loader_start:
     cmp ax, 1
     je .a20_enabled_fast
     jmp error16 ; Failed to enable A20 line, error
-.a20_enabled_firmware:
-    ; A20 was already enabled
-    mov [A20_FIRM], 1
+.a20_enabled_firmware: ; A20 was already enabled
+    mov byte [A20_FIRM], 1
     jmp .a20_enabled
-.a20_enabled_fast:
-    mov [A20_FAST], 1
+.a20_enabled_fast: ; A20 was enabled by Fast A20
+    mov byte [A20_FAST], 1
     jmp .a20_enabled
-.a20_enabled_bios:
-    mov [A20_BIOS], 1
-.a20_enabled: 
-    mov [A20_ENABLED], 1
+.a20_enabled_bios: ; A20 was enabled with BIOS interrupts
+    mov byte [A20_BIOS], 1
+.a20_enabled: ; A20 was enabled with any method
+    mov byte [A20_ENABLED], 1
 
 pm_setup:
-    cli
+    cli ; Clear interrupts
     ; Disable NMI
     mov al, 0x80
     out 0x70, al
     in al, 0x71
-    lgdt[gdt_desc]
+    
+    lgdt[gdt_desc] ; Load GDT Descriptor
 
     ; Set protection enable bit in CR0
     mov eax, cr0
@@ -80,22 +92,54 @@ pm_setup:
     mov cr0, eax
 
     jmp 0x08:pm_main ; Jump to Protected Mode
+    ; 0x08 - Code Segment selector
 
+; Sources
+; https://cdrdv2-public.intel.com/929349/325462-093-sdm-vol-1-2abcd-3abcd-4.pdf
+; Starting at page 3246 or 3245, vol. 3A 3-9 to vol. 3A 3-11
+; https://wiki.osdev.org/Global_Descriptor_Table
 gdt:
     dq 0x00000000 ; Null descriptor
 gdt_code_seg:
     dw 0xFFFF ; Limit
     dw 0x0000 ; Base (bits 0-15)
     db 0x00 ; Base (bits 16-23)
-    db 10011010b ; Access byte
+    db 10011011b ; Access byte
+    ; P = 1 (Must be always 1)
+    ; DPL = 00 (Ring 0)
+    ; S = 1 (Code or Data segment)
+    ; E = 1 (Executable)
+    ; DC = 0 (Can only be executed by DPL)
+    ; RW = 1 (Readable)
+    ; A = 1 (Accessed bit)
+
     db 11001111b ; Flags
+    ; G = 1 (Granularity)
+    ; DB = 1 (32-bit segment)
+    ; L = 0 (Not Long Mode)
+    ; AVL = 0 (Not available for use by system software)
+    ; Limit = 1111 (Segment limit)
+
     db 0x00 ; Base (bits 24-31)
 gdt_data_seg:
     dw 0xFFFF ; Limit
     dw 0x0000 ; Base (bits 0-15)
     db 0x00 ; Base (bits 16-23)
-    db 10010010b ; Access byte
+    db 10010011b ; Access byte
+    ; P = 1 (Must be always 1)
+    ; DPL = 00 (Ring 0)
+    ; S = 1 (Code or Data segment)
+    ; E = 0 (Not executable)
+    ; DC = 0 (Segment grows up)
+    ; RW = 1 (Writeable)
+    ; A = 1 (Accessed bit)
+
     db 11001111b ; Flags
+    ; G = 1 (Granularity)
+    ; DB = 1 (32-bit segment)
+    ; L = 0 (Not Long Mode)
+    ; AVL = 0 (Not available for use by system software)
+    ; Limit = 1111 (Segment limit)
     db 0x00 ; Base (bits 24-31)
 gdt_end:
 
@@ -105,73 +149,75 @@ gdt_desc:
 
 BITS 32 ; Now we're in Protected Mode
 pm_main:
-    cli
-    mov eax, 0x10
-    mov ds, eax
-    mov es, eax
-    mov fs, eax
-    mov gs, eax
+    cli ; Clear interrupts
+    mov eax, 0x10 ; Set EAX to Data Segment selector so we can load segments with this value.
+    ; Set segments to Data Segment selector
+    mov ds, eax ; DS = 0x10
+    mov es, eax ; ES = 0x10
+    mov fs, eax ; FS = 0x10
+    mov gs, eax ; GS = 0x10
 .setup_stack:
-    mov ss, eax
+    mov ss, eax ; SS = 0x10
     mov esp, 0x90000
-    ; Enable NMI
+.enable_nmi: ; Enable Not Maskable Interrupts
     mov al, 0
     out 0x70, al
     in al, 0x71
-.video_setup:
+.video_setup: ; Video setup, so we can print to VGA
     call evga_setup
-    call evga_cursor_disable
+    call evga_cursor_disable ; Disable the VGA cursor
 .pic_remap:
-    call pic_remap
+    call pic_remap ; Remap using 8259 PIC (Programmable Interrupt Controller)
     evga_println("PIC remapped")
-.is_lm_available:
-    mov eax, 0x80000000
+.is_lm_available: ; Check if Long Mode is available 
+    mov eax, CPUID_EXTENSIONS
     cpuid
-    cmp eax, 0x80000001
-    jb .display_info ; Skip
-    mov eax, 0x80000001
+    cmp eax, CPUID_EXT_FEATURES
+    jb .display_info ; Skip, this machine does not support Long Mode
+    mov eax, CPUID_EXT_FEATURES
     cpuid
-    test edx, 1 << 29
-    jz .display_info ; Skip
+    test edx, CPUID_EDX_EXT_FEAT_LM
+    jz .display_info ; Skip, not set, Long Mode not supported
 .lm_available:
-    mov [LM_SUPPORT], 1
+    mov byte [LM_SUPPORT], 1 ; Long Mode is supported
 .display_info:
 .boot_device:
     evga_print(boot_device_msg)
-    evga_printhex(BOOT_DEVICE)
-    call evga_newline
+    evga_printhex(BOOT_DEVICE) ; Print boot device number in hex
+    call evga_newline ; Create a new line
 .drive_count:
     evga_print("Drives: ")
-    evga_printdec(DRIVE_COUNT)
-    call evga_newline
+    evga_printdec(DRIVE_COUNT) ; Print drive number in decimal
+    call evga_newline ; Create a new line
 .a20_info:
-    mov si, a20_enabled_msg
-    call _evga_print
-    cmp [A20_FIRM], 1 ; Was A20 already enabled by firmware
+    evga_print(a20_enabled_msg)
+    cmp byte [A20_FIRM], 1 ; Was A20 already enabled by firmware
     je .a20_firm
-    cmp [A20_BIOS], 1 ; Was A20 enabled by BIOS
+    cmp byte [A20_BIOS], 1 ; Was A20 enabled by BIOS
     je .a20_bios
-    cmp [A20_FAST], 1 ; Was A20 enabled by Fast A20
+    cmp byte [A20_FAST], 1 ; Was A20 enabled by Fast A20
     je .a20_fast
-.a20_firm:
+.a20_firm: ; Print that A20 was already enabled
     evga_println(firmware_msg)
     jmp .lm_info
-.a20_bios:
+.a20_bios: ; Print that we enabled A20 using the BIOS method
     evga_println(bios_msg)
     jmp .lm_info
-.a20_fast:
+.a20_fast: ; Print that we enabled A20 using Fast A20 method
     evga_println(fast_a20_msg)
-    call _evga_print
     jmp .lm_info
-.lm_info:
-    cmp [LM_SUPPORT], 1
-    je .lm_supported
-    evga_print(lm_unsuppored_msg)
-    jmp .memory
-.lm_supported:
-    evga_print(lm_supported_msg)
+.lm_info: ; Check if Long Mode (64 bit mode) is supported
+    cmp byte [LM_SUPPORT], 1 ; Check if LM_SUPPORT = 1
+    je .lm_supported ; Yes it does
+    ; Else
+    evga_print(lm_unsuppored_msg) ; Print LM is unsupported
+    jmp .memory ; Jump to next step
+.lm_supported: ; LM_SUPPORT = 1
+    evga_print(lm_supported_msg) ; Print LM is supported
 .memory:
-    call error32
+    
+loader_done:
+    jmp kernel_entry
 
 section .data
 BOOT_DEVICE db 0 ; Boot device number
@@ -182,11 +228,11 @@ A20_BIOS    db 0 ; Was A20 enabled using the BIOS method
 A20_FAST    db 0 ; Was A20 enabled using Fast A20 method
 LM_SUPPORT  db 0 ; Is Long Mode supported
 
+; Some messages we used
 boot_device_msg: db "Boot device: ", 0
 a20_enabled_msg: db "A20 enabled using ", 0
 fast_a20_msg: db "Fast A20", 0
 bios_msg: db "BIOS", 0
 firmware_msg: db "Firmware", 0
-
 lm_supported_msg: db "Long Mode supported", 0 ; Yes
 lm_unsuppored_msg: db "Long Mode not supported", 0 ; No

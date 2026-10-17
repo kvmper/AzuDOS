@@ -17,23 +17,24 @@ hex_values db "0123456789ABCDEF", 0
 hex_prefix db "0x", 0
 
 section .text
-evga_setup:
-    mov edi, 0xB8000
-    mov [cursor_x_pos], 0
-    mov [cursor_y_pos], 0
+evga_setup: ; Setup VGA Text mode
+    mov edi, 0xB8000 ; VGA Text Mode address
+    ; Set cursor position
+    mov byte [cursor_x_pos], 0
+    mov byte [cursor_y_pos], 0
     ret
 
-_evga_print_char:
+_evga_print_char: ; Print single characters
     mov ah, 0x0F
 .print_char:
     mov word [edi], ax
     add edi, 2
 .done:
-    inc [cursor_x_pos]
+    inc byte [cursor_x_pos]
     call evga_cursor_move
     ret
 
-_evga_print:
+_evga_print: ; Print strings
 .print:
     mov al, [esi]
     or al, al
@@ -44,7 +45,7 @@ _evga_print:
 .done:
     ret
 
-_evga_println:
+_evga_println: ; Print a string and a new line
     call _evga_print
     call evga_newline
     ret
@@ -72,14 +73,17 @@ _evga_printhex:
     call _evga_printhex_func
     ret
 
-_evga_printdec:
+_evga_printdec: ; Print numbers
     add al, '0'
     call _evga_print_char
     ret
 
-evga_newline:
-    mov byte [cursor_x_pos], 0
-    inc byte [cursor_y_pos]
+evga_newline: ; Create a new line
+    mov byte [cursor_x_pos], 0 ; Set cursor to start at the beginning of the line
+    inc byte [cursor_y_pos] ; Move onto the next line
+    ; Some math for calculating where in memory we should start printing
+    ; We might want uhh to revamp this later cause i do not wanna rely on EDI
+    ; for cursor position, we might want to replace this with X and Y cursor system instead
     movzx eax, byte [cursor_y_pos]
     mov ecx, 160
     mul ecx
@@ -87,7 +91,7 @@ evga_newline:
     add edi, eax
     ret
 
-evga_cursor_disable:
+evga_cursor_disable: ; Disables the VGA Text Mode cursor
     pushad
     pushfd
     mov dx, 0x3D4
@@ -100,7 +104,7 @@ evga_cursor_disable:
     popad
     ret
 
-evga_cursor_enable:
+evga_cursor_enable: ; Enables the VGA Text Mode Cursor
     pushad
     pushfd
     mov dx, 0x3D4
@@ -125,7 +129,7 @@ evga_cursor_enable:
     popad
     ret
 
-evga_cursor_move:
+evga_cursor_move: ; Moves the VGA Text Mode Cursor to the position of the cursor
     pushad
     pushfd
     mov eax, edi
@@ -154,5 +158,5 @@ evga_cursor_move:
     ret
 
 section .data
-cursor_x_pos db 0
-cursor_y_pos db 0 
+cursor_x_pos db 0 ; Column
+cursor_y_pos db 0 ; Line
