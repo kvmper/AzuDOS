@@ -210,10 +210,10 @@ pm_main:
     cmp byte [LM_SUPPORT], 1 ; Check if LM_SUPPORT = 1
     je .lm_supported ; Yes it does
     ; Else
-    evga_print(lm_unsuppored_msg) ; Print LM is unsupported
+    evga_println(lm_unsuppored_msg) ; Print LM is unsupported
     jmp .memory ; Jump to next step
 .lm_supported: ; LM_SUPPORT = 1
-    evga_print(lm_supported_msg) ; Print LM is supported
+    evga_println(lm_supported_msg) ; Print LM is supported
 .memory:
     
 loader_done:

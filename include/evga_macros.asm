@@ -1,6 +1,11 @@
 %ifndef EVGA_MACROS_ASM
 %define EVGA_MACROS_ASM
 
+extern _evga_print
+extern _evga_println
+extern _evga_printhex
+extern _evga_printdec
+
 %macro __evga_print 1
 %ifstr %1
     jmp short %%start
