@@ -61,14 +61,17 @@ check_a20__exit:
 ; Enable the A20 line using AX = 0x2401, INT = 0x15
 bios_a20: ; Extremely simplified version but it works
 .query:
-    mov ax, 0x2403
+    mov ax, 0x2403 ; Query A20 gate support
     int 0x15
-    jc .failed
+    jc .failed ; Int 0x15 is not supported
+    test ah, ah
+    jnz .failed ; Int 0x15 is not supported
 .activate:
     mov ax, 0x2401
     int 0x15
     jc .failed
 .failed:
+    stc
     ret
 
 fast_a20:

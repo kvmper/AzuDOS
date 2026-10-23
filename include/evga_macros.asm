@@ -55,7 +55,7 @@ extern _evga_printdec
 %define evga_printhex(a) __evga_printhex a
 
 %macro __evga_printdec 1
-    mov al, [%1]
+    mov ax, word [%1]
     call _evga_printdec
 %endmacro
 

@@ -1,6 +1,7 @@
 BITS 32
 
 global pic_remap
+global PIC_INIT
 
 PIC1            equ 0x20
 PIC2            equ 0xA0
@@ -51,7 +52,10 @@ pic_remap:
     mov al, 0x00
     out PIC1_DATA, al
     out PIC2_DATA, al
+    mov byte [PIC_INIT], 1
     ret
 io_wait:
     out 0x80, al
     ret
+
+PIC_INIT: db 0

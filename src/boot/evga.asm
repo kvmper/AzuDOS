@@ -25,11 +25,13 @@ evga_setup: ; Setup VGA Text mode
     ret
 
 _evga_print_char: ; Print single characters
+    push ax
     mov ah, 0x0F
 .print_char:
     mov word [edi], ax
     add edi, 2
 .done:
+    pop ax
     inc byte [cursor_x_pos]
     call evga_cursor_move
     ret
@@ -73,9 +75,33 @@ _evga_printhex:
     call _evga_printhex_func
     ret
 
+; Spent about an hour trying to fix this, however the issue had to do with something else....
 _evga_printdec: ; Print numbers
-    add al, '0'
+    mov cx, 0 ; How many nubmers
+    cmp ax, 0 ; If 0
+    je .zero
+.extract:
+    cmp ax, 0 ; Check if no more numbers
+    je .print
+    xor dx, dx
+    mov bx, 10 ; Divisor
+    div bx ; Divide
+    add dx, '0'
+    push dx ; Push remainder onto the stack
+    inc cx ; Increment number counter
+    jmp .extract
+.print:
+    cmp cx, 0
+    je .done
+    pop dx
+    mov al, dl
     call _evga_print_char
+    dec cx
+    jmp .print
+.zero:
+    mov al, '0'
+    call _evga_print_char
+.done:
     ret
 
 evga_newline: ; Create a new line

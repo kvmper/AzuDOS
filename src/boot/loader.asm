@@ -8,6 +8,11 @@ extern fast_a20
 
 ; PIC
 extern pic_remap
+extern PIC_INIT
+
+; IDT
+extern idt_setup
+extern IDT_INIT
 
 ; EVGA
 extern evga_setup
@@ -76,6 +81,13 @@ loader_start:
     mov byte [A20_BIOS], 1
 .a20_enabled: ; A20 was enabled with any method
     mov byte [A20_ENABLED], 1
+.lower_memory:
+    clc ; Clera carry flag
+    int 0x12 ; Request low memory size
+    jc error16
+    mov [LOW_MEMORY], ax
+.upper_memory:
+    ; Via E820 mem map, gonna implement later
 
 pm_setup:
     cli ; Clear interrupts
@@ -149,6 +161,7 @@ gdt_desc:
 
 BITS 32 ; Now we're in Protected Mode
 pm_main:
+    clc ; Clear carry flag
     cli ; Clear interrupts
     mov eax, 0x10 ; Set EAX to Data Segment selector so we can load segments with this value.
     ; Set segments to Data Segment selector
@@ -163,12 +176,13 @@ pm_main:
     mov al, 0
     out 0x70, al
     in al, 0x71
+.cpu_setuo:
+    call pic_remap ; Remap using 8259 PIC (Programmable Interrupt Controller)
+    call idt_setup ; Setup Interrupt Descriptor Table so no crashes if interrupts are enabled
 .video_setup: ; Video setup, so we can print to VGA
     call evga_setup
     call evga_cursor_disable ; Disable the VGA cursor
-.pic_remap:
-    call pic_remap ; Remap using 8259 PIC (Programmable Interrupt Controller)
-    evga_println("PIC remapped")
+    evga_println("VGA Text Mode initialized")
 .is_lm_available: ; Check if Long Mode is available 
     mov eax, CPUID_EXTENSIONS
     cpuid
@@ -181,6 +195,12 @@ pm_main:
 .lm_available:
     mov byte [LM_SUPPORT], 1 ; Long Mode is supported
 .display_info:
+    cmp byte [IDT_INIT], 0
+    je .boot_device
+    cmp byte [PIC_INIT], 0
+    je .boot_device
+    evga_println("IDT initialized")
+    evga_println("PIC remapped")
 .boot_device:
     evga_print(boot_device_msg)
     evga_printhex(BOOT_DEVICE) ; Print boot device number in hex
@@ -215,18 +235,29 @@ pm_main:
 .lm_supported: ; LM_SUPPORT = 1
     evga_println(lm_supported_msg) ; Print LM is supported
 .memory:
+.lower_memory: ; Up to 640 KB
+    evga_print("Lower Memory: ")
+    evga_printdec(LOW_MEMORY) ; Low mem is in KB
+    evga_print(" KB")
+    call evga_newline
+.upper_memory:
+    evga_print("Upper Memory: ")
+    evga_print("No data") ; Placeholder
+    call evga_newline
     
 loader_done:
     jmp kernel_entry
 
 section .data
 BOOT_DEVICE db 0 ; Boot device number
-DRIVE_COUNT db 0 ; How many drives has the BIOS found
+DRIVE_COUNT dw 0 ; How many drives has the BIOS found
 A20_ENABLED db 0 ; Was A20 enabled
 A20_FIRM    db 0 ; Was A20 enabled already by the CPU
 A20_BIOS    db 0 ; Was A20 enabled using the BIOS method
 A20_FAST    db 0 ; Was A20 enabled using Fast A20 method
 LM_SUPPORT  db 0 ; Is Long Mode supported
+
+LOW_MEMORY dw 0 ; Low memory (up to 640 kb)
 
 ; Some messages we used
 boot_device_msg: db "Boot device: ", 0

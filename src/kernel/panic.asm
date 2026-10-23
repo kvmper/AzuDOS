@@ -3,6 +3,7 @@ global error32
 
 extern evga_newline
 extern _evga_print
+extern evga_cursor_disable
 
 %include "include/evga_macros.asm"
 
@@ -10,8 +11,11 @@ BITS 16
 ; Blink on Caps Lock LED to indicate error
 ; And please clean this mess oh my god
 ; I should have commented this along the way i don't undrstand this
+; Oh yeah and i should probably mention it only works on PS/2 keyboards (obviously)
 ; 16 bit version
 error16:
+    call evga_cursor_disable
+.loop:
     ; Turn on Caps Lock LED
     mov bl, 0x04
     call .blink_leds
@@ -20,7 +24,7 @@ error16:
     mov bl, 0x00
     call .blink_leds
     call .err_wait
-    jmp error16
+    jmp .loop
 .blink_leds:
 .wait_0:
     in al, 0x64
@@ -47,7 +51,7 @@ error16:
     cmp ecx, 0
     je .return
     dec ecx
-    jmp .spin
+    jmp .loop
 .return:
     ret
 

@@ -20,19 +20,19 @@ C_OBJ = $(patsubst src/%.c, build/%.o, $(C_SRC))
 
 build: $(IMG)
 
-$(IMG): build/boot.bin build/boot/loader.o $(ASM_OBJ) $(C_OBJ)
+$(IMG): build/boot/boot.bin build/boot/loader.o $(ASM_OBJ) $(C_OBJ)
 	@$(LD) -m elf_i386 -T linker/boot/linker.ld -o build/kernel.elf build/boot/loader.o $(ASM_OBJ) $(C_OBJ)
 	@echo [LD] build/boot/loader.o $(ASM_OBJ) $(C_OBJ)
 	@$(OBJCOPY) -O binary build/kernel.elf build/kernel.bin
 	@echo [OBJCOPY] build/kernel.elf build/kernel.bin
-	@cat build/boot.bin build/kernel.bin > $(IMG)
+	@cat build/boot/boot.bin build/kernel.bin > $(IMG)
 	@truncate -s 4096K $(IMG)
 	@echo Created $(IMG)
 	@du -b build/kernel.bin $(IMG)
 
 prepare:
-	@mkdir -p build dist/docs
-	@echo Created build directories: build dist
+	@mkdir -p build/boot dist/docs qemu-log/
+	@echo Created build directories: build dist qemu-log
 	@$(AS) -v > /dev/null
 	@$(LD) -v > /dev/null
 	@$(OBJCOPY) -V > /dev/null
@@ -42,7 +42,7 @@ build/%.o: src/%.asm
 	@mkdir -p $(dir $@)
 	@$(AS) $(AS_FLAGS) $< -o $@
 	@echo "[AS] $< $@ ($$(stat --printf="%s" $@) bytes)"
-build/boot.bin: src/boot/boot.asm
+build/boot/boot.bin: src/boot/boot.asm
 	@$(AS) -f bin $< -o $@
 	@echo "[AS] $< $@ ($$(stat --printf="%s" $@) bytes)"
 build/%.o: src/%.c
@@ -50,12 +50,12 @@ build/%.o: src/%.c
 	@$(GCC) $(C_FLAGS) $< -o $@
 	@echo "[GCC] $< $@ ($$(stat --printf="%s" $@) bytes)"
 clean:
-	@echo "Removing files: $(strip build/boot/loader.o $(ASM_OBJ) build/boot.bin $(C_OBJ))"
-	@rm -rf $(ASM_OBJ) build/boot/loader.o build/boot.bin $(C_OBJ)
+	@echo "Removing files: $(strip build/boot/loader.o $(ASM_OBJ) build/boot/boot.bin $(C_OBJ))"
+	@rm -rf $(ASM_OBJ) build/boot/loader.o build/boot/boot.bin $(C_OBJ)
 	@echo "Cleaning done"
 clean-all:
-	@echo "Removing directories: build dist"
-	@rm -rf build dist
+	@echo "Removing directories: build dist qemu-log"
+	@rm -rf build dist qemu-log
 	@echo "Cleaning done"
 run: $(IMG)
 	@echo -e "\nAzuDOS 64-bit\n------------------------------"
@@ -67,3 +67,5 @@ run-gdb:
 	@echo -e "\nAzuDOS 64-bit GDB\n------------------------------"
 	qemu-system-x86_64 -s -S -cpu host -enable-kvm -drive file=$(IMG),format=raw,media=disk -serial stdio -d int,cpu_reset,guest_errors -no-reboot
 docs:
+	@pandoc docs/main.md -o dist/docs/main.pdf
+	@echo -e "Done :>"

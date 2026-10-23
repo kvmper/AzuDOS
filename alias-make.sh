@@ -1,4 +1,7 @@
 alias build="make build"
+alias prepare="make prepare"
 alias clean="make clean"
+alias clean-all="make clean-all"
 alias run="make run"
 alias run32="make run32"
+alias run-gdb="make run-gdb"
