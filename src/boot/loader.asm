@@ -35,6 +35,9 @@ extern error32
 ; Kernel related
 extern kernel_entry
 
+; CPUID
+EFLAGS_ID equ 1 << 21 ; If can be flipped, CPUID instruction is available
+
 ; For Long Mode
 CPUID_EXTENSIONS equ 0x80000000 ; returns the maximum extended requests for cpuid
 CPUID_EXT_FEATURES equ 0x80000001 ; returns flags containing long mode support among other things
@@ -183,6 +186,28 @@ pm_main:
     call evga_setup
     call evga_cursor_disable ; Disable the VGA cursor
     evga_println("VGA Text Mode initialized")
+.check_cpuid: ; EAX = 1 - CPUID supported
+; Probably works, but I have a feeling it doesnt...
+    pushfd ; Preserve EFLAGS
+    pop eax
+    ; Save for later for comparision
+    mov ecx, eax
+    xor eax, EFLAGS_ID
+    ; Check if the bit was flipped
+    push eax
+    popfd
+    pushfd
+    pop eax
+    ; Restore EFLAGS
+    push ecx
+    popfd
+    ; If flipped, CPUID is supported
+    xor eax, ecx
+    jnz .supported
+.not_supported:
+    jmp error32
+.supported:
+    evga_println("CPUID supported")
 .is_lm_available: ; Check if Long Mode is available 
     mov eax, CPUID_EXTENSIONS
     cpuid

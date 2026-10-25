@@ -1,37 +1,29 @@
-// Placeholder, obviously
-// Btw i didnt feel like writing the code for printing again so i stole it from a project i made almost 2 years ago
+#include "include/kvideo.h"
+#include "include/exit.h"
+#include "include/string.h"
+#include "include/io.h"
 
-#include "stdint.h"
+extern int init(void); // Wheres init??
 
-extern uint8_t cursor_x_pos;
-extern uint8_t cursor_y_pos;
-
-uint16_t cursor_pos = 0;
-
-#define VGA_MEM ((volatile uint16_t*)0xB8000)
-
-void printchar(char c, uint8_t color) {
-    uint8_t bg = 0x0;
-    int i;
-    if (c == '\n') {
-        cursor_pos += 80 - (cursor_pos % 80);
-        return;
+// Main entry point
+int main(void) {
+    int code; // Exit code received from init
+    if ((code = init())) {
+        /*  If init returns a non-zero value (error)
+            then exit the kernel (back to entry.asm) */
+        return exit_krnl(code); // Exit with code received from init
     }
-    else {
-        VGA_MEM[cursor_pos++] = ((bg << 4) | color) << 8 | c;
-    }
-
+    // Not an error, exit and halt forever
+    return exit_krnl(0); // Exit with code 0 (success!)
 }
 
-void print(const char* str, uint8_t color) {
-    while (*str != '\0') {
-        printchar(*str, color);
-        str++;
-    }
-}
-
-int init_main(void) {
-    cursor_pos = (80 * cursor_y_pos);
-    print("Reached init yippie", 0xB);
+int init(void) {
+    kvideo_setup();
+    kprint("Reached init yippie :)\n", 0xB);
+    kprint("Exiting...          :(\n", 0xD);
+    for (int i = 0; i < 3; i++) outb(0x3F8, 'H');   // Print 3 H's to uninitialized serial port
+                                                    // Prolly will crash on real computers
+                                                    // since we didnt initialize it yet
+    uint64_t funny = 0/0; // For funsies
     return 0;
 }

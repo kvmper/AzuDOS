@@ -3,7 +3,7 @@ AS_FLAGS := -f elf32 # For now...
 
 # We are now using a cross compilerrrrrr
 GCC := i686-elf-gcc
-C_FLAGS := -ffreestanding -nostdlib -c -O0
+C_FLAGS := -ffreestanding -nostdlib -c -O2 -I.
 
 LD := i686-elf-ld
 OBJCOPY := i686-elf-objcopy
@@ -38,14 +38,14 @@ prepare:
 	@$(OBJCOPY) -V > /dev/null
 	@$(GCC) --version > /dev/null
 	@echo "Crucial tools are installed, you are free to go build AzuDOS!!! :D"
-build/%.o: src/%.asm
+build/%.o: src/%.asm # Assemble all assembly files except the MBR
 	@mkdir -p $(dir $@)
 	@$(AS) $(AS_FLAGS) $< -o $@
 	@echo "[AS] $< $@ ($$(stat --printf="%s" $@) bytes)"
-build/boot/boot.bin: src/boot/boot.asm
+build/boot/boot.bin: src/boot/boot.asm # Assemble MBR
 	@$(AS) -f bin $< -o $@
 	@echo "[AS] $< $@ ($$(stat --printf="%s" $@) bytes)"
-build/%.o: src/%.c
+build/%.o: src/%.c # Compile all C files
 	@mkdir -p $(dir $@)
 	@$(GCC) $(C_FLAGS) $< -o $@
 	@echo "[GCC] $< $@ ($$(stat --printf="%s" $@) bytes)"

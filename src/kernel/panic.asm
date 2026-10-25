@@ -58,7 +58,7 @@ error16:
 BITS 32
 error32:
     call evga_newline
-    evga_print("Encountered a critical error! (PM)")
+    evga_println("Encountered a critical error! (PM)")
 .main_loop:
     ; Turn on Caps Lock LED
     mov bl, 0x04

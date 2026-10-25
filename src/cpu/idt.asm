@@ -1,3 +1,5 @@
+%include "include/evga_macros.asm"
+
 global idt_setup
 global IDT_INIT
 idt_setup:
@@ -16,7 +18,7 @@ idt_setup:
     jne .loop ; Repeat till no more entries
     lidt [idt_desc] ; Load the IDT
     mov byte [IDT_INIT], 1 ; Let us know IDT has been intialized
-    ret ; Done
+    ret
 idt_ignore:
     iret
 
