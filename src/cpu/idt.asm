@@ -1,4 +1,4 @@
-%include "include/evga_macros.asm"
+extern pit_irq0
 
 global idt_setup
 global IDT_INIT
@@ -16,6 +16,16 @@ idt_setup:
     add edi, 8 ; Now continue to the next entry
     dec ecx ; Next entry
     jne .loop ; Repeat till no more entries
+.irq0:
+    mov edi, idt_entries + 256 
+    mov edx, pit_irq0
+    mov eax, 0x00080000 ; CS selector
+    mov ax, dx
+    and edx, 0xFFFF0000
+    or edx, 0x8E00
+    mov [edi], eax
+    mov [edi + 4], edx
+.load:
     lidt [idt_desc] ; Load the IDT
     mov byte [IDT_INIT], 1 ; Let us know IDT has been intialized
     ret

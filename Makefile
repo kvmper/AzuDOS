@@ -3,7 +3,7 @@ AS_FLAGS := -f elf32 # For now...
 
 # We are now using a cross compilerrrrrr
 GCC := i686-elf-gcc
-C_FLAGS := -ffreestanding -nostdlib -c -O2 -I.
+C_FLAGS := -ffreestanding -nostdlib -c -O2 -Iinclude
 
 LD := i686-elf-ld
 OBJCOPY := i686-elf-objcopy

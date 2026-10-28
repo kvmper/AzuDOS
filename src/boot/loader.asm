@@ -269,7 +269,25 @@ pm_main:
     evga_print("Upper Memory: ")
     evga_print("No data") ; Placeholder
     call evga_newline
-    
+.setup_paging32: ; Works
+    mov dword [page_dir + 0 * 4], 0x00000083
+    mov dword [page_dir + 768 * 4], 0x00000083
+.enable_pse:
+    mov eax, cr4
+    or eax, 0x00000010
+    mov cr4, eax
+.enable_paging32:
+    mov eax, page_dir
+    mov cr3, eax
+    mov eax, cr0
+    or eax, 0x80000001
+    mov cr0, eax
+    mov eax, loader_done
+    jmp eax
+.paging_enabled32:
+    mov dword [page_dir + 0 * 4], 0 ; Remove identity mapping
+
+; Someday, we will be in long mode
 loader_done:
     jmp kernel_entry
 
@@ -292,3 +310,8 @@ bios_msg: db "BIOS", 0
 firmware_msg: db "Firmware", 0
 lm_supported_msg: db "Long Mode supported", 0 ; Yes
 lm_unsuppored_msg: db "Long Mode not supported", 0 ; No
+
+section .bss
+align 4096
+page_dir: resb 4096
+table_768: resb 4096

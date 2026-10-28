@@ -1,8 +1,8 @@
 int strcmp(const char* str1, const char* str2) {
     while (*str1 && (*str1 == *str2)) { // Loop while str1 has not ended
                                         // and while str1 is the same as str2
-        str1++;
-        str2++;
+        str1++; // Continue to next letter of str1
+        str2++; // Continue to next letter of str2
     }
     // If 0, they are equal
     return *str1 - *str2;

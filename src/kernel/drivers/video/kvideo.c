@@ -55,3 +55,11 @@ void kprint_dec(int dec, uint8_t color) {
         j++; // Continue to next charcater
     }
 }
+
+void kvideo_clear(uint8_t color) {
+    cursor_pos = 0;
+    for (int i = 0; i < 80*25; i++) {
+        kprint_char(' ', color);
+    } 
+    cursor_pos = 0;
+}
